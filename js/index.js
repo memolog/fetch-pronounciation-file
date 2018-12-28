@@ -37,10 +37,11 @@ exports.createImportFile = (content, outDir) => {
 exports.fetchResouces = async (word, translation, outDir) => {
     const browser = await puppeteer.launch();
     const page = await browser.newPage();
-    const dictHost = 'https://dictionary.cambridge.org/';
-    let content = '';
+    console.log(`---- ${word} ----`);
+    let content = `${translation}<br>`;
+    let thumbUrl, soundUrl, soundExt;
     try {
-        console.log(`---- ${word} ----`);
+        const dictHost = 'https://dictionary.cambridge.org/';
         await page.goto(`${dictHost}dictionary/english`);
         await page.type('#cdo-search-input', word);
         const searchSubmitButton = await page.$('.cdo-search__button');
@@ -49,9 +50,8 @@ exports.fetchResouces = async (word, translation, outDir) => {
         await page.waitForSelector('.entry', {
             timeout: 10000,
         });
-        content += `${translation}<br>`;
         const entryHandle = await page.$('.entry');
-        let thumbUrl = await page.evaluate((entry) => {
+        thumbUrl = await page.evaluate((entry) => {
             if (!entry) {
                 return;
             }
@@ -68,7 +68,7 @@ exports.fetchResouces = async (word, translation, outDir) => {
             content += `<img src="${word}${imageExt}" width="320"><br>`;
             await download(`${dictHost}${thumbUrl}`, word, imageExt, outDir);
         }
-        const soundUrl = await page.evaluate((entry) => {
+        soundUrl = await page.evaluate((entry) => {
             if (!entry) {
                 return;
             }
@@ -79,7 +79,17 @@ exports.fetchResouces = async (word, translation, outDir) => {
             const audioButton = span.getElementsByClassName('audio_play_button')[0];
             return audioButton.getAttribute('data-src-mp3');
         }, entryHandle);
+        if (soundUrl) {
+            soundExt = path.extname(soundUrl.replace(/\?.+$/, ''));
+            await download(`${dictHost}${soundUrl}`, word, soundExt, outDir);
+        }
         entryHandle.dispose();
+    }
+    catch (error) {
+        await page.screenshot({ path: 'error_cambridge.png' });
+        console.log(error);
+    }
+    try {
         if (!thumbUrl) {
             await page.goto(`https://unsplash.com/search/photos/${word}`);
             const imgHandle = await page.$('figure img');
@@ -95,14 +105,12 @@ exports.fetchResouces = async (word, translation, outDir) => {
             imgHandle.dispose();
         }
         content += `;${word}<br>`;
-        if (soundUrl) {
-            const soundExt = path.extname(soundUrl.replace(/\?.+$/, ''));
+        if (soundUrl && soundExt) {
             content += `[sound:${word}${soundExt}]`;
-            await download(`${dictHost}${soundUrl}`, word, soundExt, outDir);
         }
     }
     catch (err) {
-        await page.screenshot({ path: 'error.png' });
+        await page.screenshot({ path: 'error_unsplash.png' });
         console.log(err);
     }
     await browser.close();
