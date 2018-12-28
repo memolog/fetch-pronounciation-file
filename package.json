@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Fetch pronounciation audio files from website",
   "main": "./js/index.js",
+  "bin": "./js/bin.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -15,6 +16,7 @@
   "license": "ISC",
   "dependencies": {
     "@types/puppeteer": "^1.11.1",
+    "commander": "^2.19.0",
     "puppeteer": "^1.11.0"
   },
   "devDependencies": {
