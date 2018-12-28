@@ -4,3 +4,4 @@ out/media/*.jpg
 out/media/*.mp3
 out/import.txt
 data.csv
+error.png
