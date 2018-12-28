@@ -1,1 +1,6 @@
+.DS_Store
 node_modules
+out/media/*.jpg
+out/media/*.mp3
+out/import.txt
+data.csv
