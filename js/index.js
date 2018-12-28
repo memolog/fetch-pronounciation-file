@@ -8,6 +8,7 @@ const download = (url, name, ext, outDir) => {
     return new Promise((resolve, reject) => {
         outDir = outDir || 'out/media';
         const file = fs.createWriteStream(`${outDir}/${name}${ext}`);
+        console.log(url);
         https
             .get(url, (res) => {
             res.on('data', (d) => {
@@ -39,7 +40,10 @@ exports.fetchResouces = async (word, translation, outDir) => {
     const page = await browser.newPage();
     console.log(`---- ${word} ----`);
     let content = `${translation}<br>`;
-    let thumbUrl, soundUrl, soundExt;
+    let thumbUrl;
+    let soundUrl;
+    let soundName;
+    let soundExt;
     try {
         const dictHost = 'https://dictionary.cambridge.org/';
         await page.goto(`${dictHost}dictionary/english`);
@@ -65,8 +69,9 @@ exports.fetchResouces = async (word, translation, outDir) => {
         }, entryHandle);
         if (thumbUrl) {
             const imageExt = path.extname(thumbUrl.replace(/\?.+$/, '')) || '.jpg';
-            content += `<img src="${word}${imageExt}" width="320"><br>`;
-            await download(`${dictHost}${thumbUrl}`, word, imageExt, outDir);
+            const imageName = word.replace(/\s/, '_');
+            content += `<img src="${imageName}${imageExt}" width="320"><br>`;
+            await download(`${dictHost}${thumbUrl}`, imageName, imageExt, outDir);
         }
         soundUrl = await page.evaluate((entry) => {
             if (!entry) {
@@ -81,7 +86,8 @@ exports.fetchResouces = async (word, translation, outDir) => {
         }, entryHandle);
         if (soundUrl) {
             soundExt = path.extname(soundUrl.replace(/\?.+$/, ''));
-            await download(`${dictHost}${soundUrl}`, word, soundExt, outDir);
+            soundName = word.replace(/\s/, '_');
+            await download(`${dictHost}${soundUrl}`, soundName, soundExt, outDir);
         }
         entryHandle.dispose();
     }
@@ -100,13 +106,20 @@ exports.fetchResouces = async (word, translation, outDir) => {
                 return img.getAttribute('src');
             }, imgHandle);
             thumbUrl = thumbUrl.replace(/auto=format/, 'fm=jpg');
-            content += `<img src="${word}.jpg" width="320"><br>`;
-            await download(`${thumbUrl}`, word, '.jpg', outDir);
+            const imageName = word.replace(/\s/, '_');
+            content += `<img src="${imageName}.jpg" width="320"><br>`;
+            await download(`${thumbUrl}`, imageName, '.jpg', outDir);
             imgHandle.dispose();
         }
+        if (!soundUrl) {
+            const encodedWord = decodeURIComponent(word);
+            soundName = word.replace(/\s/, '_');
+            soundExt = '.mp3';
+            await download(`https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&q=${encodedWord}&tl=en&total=1&idx=0&textlen=100`, soundName, soundExt, outDir);
+        }
         content += `;${word}<br>`;
-        if (soundUrl && soundExt) {
-            content += `[sound:${word}${soundExt}]`;
+        if (soundName && soundExt) {
+            content += `[sound:${soundName}${soundExt}]`;
         }
     }
     catch (err) {
