@@ -73,26 +73,27 @@ exports.fetchResouces = async (word, translation, outDir) => {
             content += `<img src="${imageName}${imageExt}" width="320"><br>`;
             await download(`${dictHost}${thumbUrl}`, imageName, imageExt, outDir);
         }
-        soundUrl = await page.evaluate((entry) => {
-            if (!entry) {
-                return;
+        // Get campbridge dict's mp3 file only when the word is one word.
+        if (word.split(/\s/).length === 1) {
+            soundUrl = await page.evaluate((entry) => {
+                if (!entry) {
+                    return;
+                }
+                const span = entry.getElementsByClassName('us')[0];
+                if (!span) {
+                    return;
+                }
+                const audioButton = span.getElementsByClassName('audio_play_button')[0];
+                return audioButton.getAttribute('data-src-mp3');
+            }, entryHandle);
+            if (soundUrl) {
+                soundExt = path.extname(soundUrl.replace(/\?.+$/, ''));
+                await download(`${dictHost}${soundUrl}`, soundName, soundExt, outDir);
             }
-            const span = entry.getElementsByClassName('us')[0];
-            if (!span) {
-                return;
-            }
-            const audioButton = span.getElementsByClassName('audio_play_button')[0];
-            return audioButton.getAttribute('data-src-mp3');
-        }, entryHandle);
-        if (soundUrl) {
-            soundExt = path.extname(soundUrl.replace(/\?.+$/, ''));
-            soundName = word.replace(/\s/, '_');
-            await download(`${dictHost}${soundUrl}`, soundName, soundExt, outDir);
         }
         entryHandle.dispose();
     }
     catch (error) {
-        await page.screenshot({ path: 'error_cambridge.png' });
         console.log(error);
     }
     try {
@@ -123,7 +124,6 @@ exports.fetchResouces = async (word, translation, outDir) => {
         }
     }
     catch (err) {
-        await page.screenshot({ path: 'error_unsplash.png' });
         console.log(err);
     }
     await browser.close();

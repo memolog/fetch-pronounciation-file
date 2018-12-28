@@ -86,22 +86,24 @@ export const fetchResouces = async (
       await download(`${dictHost}${thumbUrl}`, imageName, imageExt, outDir);
     }
 
-    soundUrl = await page.evaluate((entry: Element) => {
-      if (!entry) {
-        return;
-      }
-      const span = entry.getElementsByClassName('us')[0];
-      if (!span) {
-        return;
-      }
-      const audioButton = span.getElementsByClassName('audio_play_button')[0];
-      return audioButton.getAttribute('data-src-mp3');
-    }, entryHandle);
+    // Get campbridge dict's mp3 file only when the word is one word.
+    if (word.split(/\s/).length === 1) {
+      soundUrl = await page.evaluate((entry: Element) => {
+        if (!entry) {
+          return;
+        }
+        const span = entry.getElementsByClassName('us')[0];
+        if (!span) {
+          return;
+        }
+        const audioButton = span.getElementsByClassName('audio_play_button')[0];
+        return audioButton.getAttribute('data-src-mp3');
+      }, entryHandle);
 
-    if (soundUrl) {
-      soundExt = path.extname(soundUrl.replace(/\?.+$/, ''));
-      soundName = word.replace(/\s/, '_');
-      await download(`${dictHost}${soundUrl}`, soundName, soundExt, outDir);
+      if (soundUrl) {
+        soundExt = path.extname(soundUrl.replace(/\?.+$/, ''));
+        await download(`${dictHost}${soundUrl}`, soundName, soundExt, outDir);
+      }
     }
 
     entryHandle.dispose();
