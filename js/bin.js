@@ -5,6 +5,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const program = require("commander");
 const fs = require("fs");
 const path = require("path");
+const puppeteer = require("puppeteer");
 const index_1 = require("./index");
 const main = (args) => {
     program
@@ -13,6 +14,8 @@ const main = (args) => {
         .option('-o, --output <file>')
         .parse(args);
     (async () => {
+        const browser = await puppeteer.launch();
+        const page = await browser.newPage();
         const contents = [];
         const filePath = program.input
             ? path.resolve(process.cwd(), program.input)
@@ -23,13 +26,13 @@ const main = (args) => {
         const stream = fs.createReadStream(filePath, 'utf8');
         stream.on('data', async (datas) => {
             const data = datas.split(/\n/);
-            for (let d of data) {
-                d = d.split(/,/);
-                if (d.length < 2) {
+            for (const d of data) {
+                const dataArray = d.split(/,/);
+                if (dataArray.length < 2) {
                     continue;
                 }
                 try {
-                    contents.push(await index_1.fetchResouces(d[0], d[1], outDir));
+                    contents.push(await index_1.fetchResouces(page, dataArray, outDir));
                 }
                 catch (err) {
                     console.log(err);
@@ -38,6 +41,7 @@ const main = (args) => {
                 }
             }
             await index_1.createImportFile(contents.join('\n'), outDir);
+            await browser.close();
             process.exit(0);
         });
     })();

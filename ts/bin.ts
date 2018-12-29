@@ -5,6 +5,7 @@
 import * as program from 'commander';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as puppeteer from 'puppeteer';
 
 import {fetchResouces, createImportFile} from './index';
 
@@ -16,6 +17,9 @@ const main = (args: any) => {
     .parse(args);
 
   (async () => {
+    const browser = await puppeteer.launch();
+    const page = await browser.newPage();
+
     const contents: string[] = [];
     const filePath = program.input
       ? path.resolve(process.cwd(), program.input)
@@ -24,15 +28,15 @@ const main = (args: any) => {
       ? path.resolve(process.cwd(), program.output)
       : null;
     const stream = fs.createReadStream(filePath, 'utf8');
-    stream.on('data', async (datas) => {
+    stream.on('data', async (datas: string) => {
       const data = datas.split(/\n/);
-      for (let d of data) {
-        d = d.split(/,/);
-        if (d.length < 2) {
+      for (const d of data) {
+        const dataArray = d.split(/,/);
+        if (dataArray.length < 2) {
           continue;
         }
         try {
-          contents.push(await fetchResouces(d[0], d[1], outDir));
+          contents.push(await fetchResouces(page, dataArray, outDir));
         } catch (err) {
           console.log(err);
           process.exit(1);
@@ -40,6 +44,8 @@ const main = (args: any) => {
         }
       }
       await createImportFile(contents.join('\n'), outDir);
+      await browser.close();
+
       process.exit(0);
     });
   })();
