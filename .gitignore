@@ -5,3 +5,4 @@ out/media/*.mp3
 out/import.txt
 data.csv
 error.png
+ts/ipa_cache.json

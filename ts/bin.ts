@@ -7,13 +7,14 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as puppeteer from 'puppeteer';
 
-import {fetchResouces, createImportFile} from './index';
+import {fetchResouces, createImportFile, createDataCacheFile} from './index';
 
 const main = (args: any) => {
   program
     .version('1.0.0')
     .option('-i, --input <file')
     .option('-o, --output <file>')
+    .option('--media <string>', 'media directory to save images and sounds')
     .parse(args);
 
   (async () => {
@@ -21,6 +22,7 @@ const main = (args: any) => {
     const page = await browser.newPage();
 
     const contents: string[] = [];
+    const ipaCache: {[key: string]: string} = {};
     const filePath = program.input
       ? path.resolve(process.cwd(), program.input)
       : './default_data.csv';
@@ -36,7 +38,13 @@ const main = (args: any) => {
           continue;
         }
         try {
-          contents.push(await fetchResouces(page, dataArray, outDir));
+          const [content, newIpaCache] = await fetchResouces(
+            page,
+            dataArray,
+            program.opts()
+          );
+          contents.push(content);
+          Object.assign(ipaCache, newIpaCache);
         } catch (err) {
           console.log(err);
           process.exit(1);
@@ -44,6 +52,7 @@ const main = (args: any) => {
         }
       }
       await createImportFile(contents.join('\n'), outDir);
+      await createDataCacheFile(JSON.stringify(ipaCache), outDir);
       await browser.close();
 
       process.exit(0);

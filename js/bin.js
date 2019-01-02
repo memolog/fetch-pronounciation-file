@@ -12,11 +12,13 @@ const main = (args) => {
         .version('1.0.0')
         .option('-i, --input <file')
         .option('-o, --output <file>')
+        .option('--media <string>', 'media directory to save images and sounds')
         .parse(args);
     (async () => {
         const browser = await puppeteer.launch();
         const page = await browser.newPage();
         const contents = [];
+        const ipaCache = {};
         const filePath = program.input
             ? path.resolve(process.cwd(), program.input)
             : './default_data.csv';
@@ -32,7 +34,9 @@ const main = (args) => {
                     continue;
                 }
                 try {
-                    contents.push(await index_1.fetchResouces(page, dataArray, outDir));
+                    const [content, newIpaCache] = await index_1.fetchResouces(page, dataArray, program.opts());
+                    contents.push(content);
+                    Object.assign(ipaCache, newIpaCache);
                 }
                 catch (err) {
                     console.log(err);
@@ -41,6 +45,7 @@ const main = (args) => {
                 }
             }
             await index_1.createImportFile(contents.join('\n'), outDir);
+            await index_1.createDataCacheFile(JSON.stringify(ipaCache), outDir);
             await browser.close();
             process.exit(0);
         });
