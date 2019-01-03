@@ -37,10 +37,11 @@ const checkIfFileExists = (name, ext, outDir, mediaDir) => {
         });
     });
 };
-exports.createImportFile = (content, outDir) => {
+exports.createImportFile = (content, outDir, basename) => {
     return new Promise((resolve, reject) => {
         const filePath = outDir || 'out';
-        fs.writeFile(`${filePath}/import.txt`, content, { flag: 'w+' }, (err) => {
+        basename = basename ? `${basename}_` : '';
+        fs.writeFile(`${filePath}/${basename}import.txt`, content, { flag: 'w+' }, (err) => {
             if (err) {
                 reject(err);
                 return;
@@ -95,34 +96,48 @@ exports.fetchResouces = async (page, data, options) => {
         console.log(err);
         return;
     }
-    const [word, translation, imageOptions, soundOptions] = data;
+    let [english, questionData, imageOptions, soundOptions, appendixOptions,] = data;
+    english = english.replace(/&#44;/g, ',');
+    const [questionType, question, questionSupplyer, questionId,] = questionData.split(/:/);
+    const word = questionType === 'question' ? question : questionType;
     let [imageSupplyer, imageId, imageName] = imageOptions
         ? imageOptions.split(/:/)
         : [null, null, null, null, null];
-    const [soundSupplyer] = soundOptions ? soundOptions.split(/:/) : [null];
-    console.log(`---- ${word} ----`);
+    const [soundSupplyer, soundId] = soundOptions
+        ? soundOptions.split(/:/)
+        : [null, null];
+    const [appendix] = appendixOptions ? appendixOptions.split(/:/g) : [null];
+    console.log(`---- ${english} ----`);
     const dictHost = 'https://dictionary.cambridge.org/';
-    const fileName = word.replace(/\s/g, '_').toLocaleLowerCase();
+    const fileName = english
+        .replace(/\s/g, '_')
+        .replace(/[^0-9a-zA-Z_]/g, '')
+        .toLocaleLowerCase();
     let thumbUrl;
     let soundUrl;
-    imageName = imageName || fileName;
     const imageFileName = /^(local|direct)$/.test(imageSupplyer) ? imageId : null;
     const imageExt = imageFileName ? path.extname(imageFileName) : '.jpg';
-    const soundName = fileName;
-    const soundExt = '.mp3';
+    imageName =
+        imageName ||
+            (imageFileName ? path.basename(imageFileName, imageExt) : null) ||
+            fileName;
+    const soundFileName = /^(local|direct)$/.test(soundSupplyer) ? soundId : null;
+    const soundExt = soundFileName ? path.extname(soundFileName) : '.mp3';
+    const soundName = (soundFileName ? path.basename(soundFileName, soundExt) : null) || fileName;
     const mediaDir = options.media ? options.media : 'media';
     let imageUrl;
     let imageCopyright = '';
     let soundCopyright = '';
     let soundIPA;
-    if (!dataCache[word] ||
+    if (!dataCache[english] ||
         (!(await checkIfFileExists(imageName, imageExt, outDir, mediaDir)) &&
-            (imageSupplyer && imageSupplyer !== 'none')) ||
-        !(await checkIfFileExists(soundName, soundExt, outDir, mediaDir))) {
-        dataCache[word] = dataCache[word] || {};
+            (imageSupplyer && !/^(none|media)$/.test(imageSupplyer))) ||
+        (!(await checkIfFileExists(soundName, soundExt, outDir, mediaDir)) &&
+            (soundSupplyer && soundSupplyer !== 'none'))) {
+        dataCache[english] = dataCache[english] || {};
         try {
             await page.goto(`${dictHost}dictionary/english`);
-            await page.type('#cdo-search-input', word);
+            await page.type('#cdo-search-input', english);
             const searchSubmitButton = await page.$('.cdo-search__button');
             await searchSubmitButton.click();
             searchSubmitButton.dispose();
@@ -176,7 +191,7 @@ exports.fetchResouces = async (page, data, options) => {
                     return [soundUrl, soundIPA];
                 }, entryHandle);
                 if (soundSupplyer === 'cambridge' ||
-                    (!soundSupplyer && word.split(/\s/).length === 1)) {
+                    (!soundSupplyer && english.split(/\s/).length === 1)) {
                     if (soundUrl) {
                         await download(`${dictHost}${soundUrl}`, soundName, soundExt, outDir, mediaDir);
                         soundCopyright = `Pronunciation from ${copyright}`;
@@ -197,7 +212,7 @@ exports.fetchResouces = async (page, data, options) => {
         }
         try {
             if (!soundUrl && soundSupplyer === 'weblio') {
-                const encodedWord = word.replace(/\s/g, '+');
+                const encodedWord = english.replace(/\s/g, '+');
                 const weblioHost = 'https://ejje.weblio.jp';
                 const url = `${weblioHost}/content/${encodedWord}`;
                 await page.goto(url);
@@ -238,14 +253,14 @@ exports.fetchResouces = async (page, data, options) => {
                 const unsplashHost = 'https://unsplash.com';
                 let imgHandles = [];
                 let imgHandle;
-                imageId = imageId || dataCache[word].unsplash;
+                imageId = imageId || dataCache[english].unsplash;
                 if (imageId) {
                     await page.goto(`${unsplashHost}/photos/${imageId}`);
                     imgHandles = await page.$$('[data-test="photos-route"] img');
                     imgHandle = imgHandles[1];
                 }
                 else {
-                    await page.goto(`${unsplashHost}/search/photos/${word}`);
+                    await page.goto(`${unsplashHost}/search/photos/${english}`);
                     const imgHandles = await page.$$('figure img');
                     if (!imgHandles && !imgHandles.length) {
                         return;
@@ -267,7 +282,7 @@ exports.fetchResouces = async (page, data, options) => {
                         const copyright = `<a href="${unsplashHost}${imageUrl}">Unsplash</a>`;
                         imageCopyright = `Image from ${copyright}<br>`;
                         if (!imageId) {
-                            dataCache[word].unsplash = path.basename(imageUrl);
+                            dataCache[english].unsplash = path.basename(imageUrl);
                         }
                         await download(`${thumbUrl}`, imageName, imageExt, outDir, mediaDir);
                     }
@@ -302,21 +317,83 @@ exports.fetchResouces = async (page, data, options) => {
                 }
                 imageCopyright = '';
             }
-            if (!soundUrl || soundSupplyer === 'google') {
-                const encodedWord = decodeURIComponent(word);
+            if ((!soundUrl && !soundSupplyer) || soundSupplyer === 'google') {
+                const encodedWord = decodeURIComponent(english);
                 const url = `https://translate.google.com/#view=home&op=translate&sl=en&tl=ja&text=${encodedWord}`;
                 const copyright = `<a href="${url}">Google Translate</a>`;
                 soundCopyright = `Pronunciation from ${copyright}`;
                 await download(`https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&q=${encodedWord}&tl=en&total=1&idx=0&textlen=100`, soundName, soundExt, outDir, mediaDir);
+            }
+            if (soundSupplyer && soundSupplyer === 'local') {
+                try {
+                    await new Promise((resolve, reject) => {
+                        const resoucePath = `${outDir}/local/${soundFileName}`;
+                        const distPath = `${outDir}/${mediaDir}/${soundFileName}`;
+                        fs.copyFile(resoucePath, distPath, (err) => {
+                            if (err) {
+                                reject(err);
+                                return;
+                            }
+                            resolve();
+                        });
+                    });
+                }
+                catch (err) {
+                    console.log(err);
+                }
+                soundCopyright = '';
             }
         }
         catch (err) {
             console.log(err);
         }
     }
-    let content = `${translation};${word};`;
+    let content = `${english};`;
+    if (questionType === 'question') {
+        let questionSoundName;
+        const questionSoundExt = '.mp3';
+        if (questionSupplyer) {
+            if (questionSupplyer === 'local') {
+                try {
+                    await new Promise((resolve, reject) => {
+                        const resoucePath = `${outDir}/local/${questionId}`;
+                        const distPath = `${outDir}/${mediaDir}/${questionId}`;
+                        fs.copyFile(resoucePath, distPath, (err) => {
+                            if (err) {
+                                reject(err);
+                                return;
+                            }
+                            resolve();
+                        });
+                    });
+                }
+                catch (err) {
+                    console.log(err);
+                }
+            }
+            content += `${question}[sound:${questionId}];`;
+        }
+        else {
+            questionSoundName = question
+                .replace(/\s/g, '_')
+                .replace(/[^0-9a-zA-Z_]/g, '')
+                .toLocaleLowerCase();
+            const encodedWord = decodeURIComponent(question);
+            if (!(await checkIfFileExists(questionSoundName, soundExt, outDir, mediaDir))) {
+                await download(`https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&q=${encodedWord}&tl=en&total=1&idx=0&textlen=100`, questionSoundName, soundExt, outDir, mediaDir);
+            }
+            content += `[sound:${questionSoundName}${questionSoundExt}];`;
+        }
+    }
+    else {
+        content += `${word};`;
+    }
     if (await checkIfFileExists(imageName, imageExt, outDir, mediaDir)) {
         content += `<img src="${imageName}${imageExt}" />;`;
+    }
+    else if (imageSupplyer && imageSupplyer === 'media') {
+        // It assumes the image is already have in the collection.media directory
+        content += `<img src="${imageId}${imageExt}" />;`;
     }
     else {
         content += ';';
@@ -328,22 +405,28 @@ exports.fetchResouces = async (page, data, options) => {
         content += ';';
     }
     if (soundIPA) {
-        dataCache[word].ipa = soundIPA;
+        dataCache[english].ipa = soundIPA;
         content += `${soundIPA};`;
     }
-    else if (dataCache[word].ipa) {
-        content += `${dataCache[word].ipa};`;
+    else if (dataCache[english].ipa) {
+        content += `${dataCache[english].ipa};`;
     }
     else {
         content += ';';
     }
     if (soundCopyright || imageCopyright) {
         const copyright = `${imageCopyright}${soundCopyright}`;
-        dataCache[word].copyright = copyright;
-        content += copyright;
+        dataCache[english].copyright = copyright;
+        content += `${copyright};`;
     }
-    else if (dataCache[word].copyright) {
-        content += dataCache[word].copyright;
+    else if (dataCache[english].copyright) {
+        content += `${dataCache[english].copyright};`;
+    }
+    else {
+        content += ';';
+    }
+    if (appendix) {
+        content += appendix;
     }
     return [content, dataCache];
 };

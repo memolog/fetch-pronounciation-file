@@ -51,7 +51,11 @@ const main = (args: any) => {
           return;
         }
       }
-      await createImportFile(contents.join('\n'), outDir);
+      await createImportFile(
+        contents.join('\n'),
+        outDir,
+        path.basename(filePath, '.csv')
+      );
       await createDataCacheFile(JSON.stringify(ipaCache), outDir);
       await browser.close();
 
